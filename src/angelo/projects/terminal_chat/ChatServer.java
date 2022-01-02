@@ -6,7 +6,9 @@ import java.nio.ByteBuffer;
 import java.nio.channels.AsynchronousServerSocketChannel;
 import java.nio.channels.AsynchronousSocketChannel;
 import java.nio.channels.CompletionHandler;
+import java.util.Scanner;
 import java.util.concurrent.ConcurrentLinkedQueue;
+import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 
 public class ChatServer {
@@ -64,6 +66,7 @@ public class ChatServer {
 					System.out.print("Message from "+attachment.getSocket().getRemoteAddress()+": ");
 					System.out.write(buffer.array());
 					System.out.println();
+					sendMessageToAll(new String(buffer.array()), attachment.getSocket());
 				} catch (IOException e) {
 					e.printStackTrace();
 				}
@@ -153,16 +156,38 @@ public class ChatServer {
 		socket.read(buffer, new MessageWrapper(buffer, socket), readHandler);
 	}
 	
+	/**Send message to all clients except ignored client
+	 * @param message - message to send to all clients
+	 * @param ignoredClient - client to ignore, can be null if no ignored client
+	 */
+	public void sendMessageToAll(String message, AsynchronousSocketChannel ignoredClient) {
+		ByteBuffer buffer = ByteBuffer.wrap(message.getBytes());
+		clientSockets.forEach(socket -> {
+			if(!socket.equals(ignoredClient)) {
+				Future<Integer> future = socket.write(buffer);
+				try {
+					future.get(10, TimeUnit.SECONDS);
+				} catch (Exception e) {
+					e.printStackTrace();
+				}
+			}
+		});
+		
+	}
+	
 	public static void main(String[] args) {
+		Scanner scn = new Scanner(System.in);
 		ChatServer server = new ChatServer();
 		server.start();
 		while(true) {
-			try {
-				TimeUnit.SECONDS.sleep(2);
-			} catch (InterruptedException e) {
-				e.printStackTrace();
+			System.out.println("Enter 'exit' to close the program");
+			String message = scn.nextLine();
+			if(message.equals("exit")) {
+				server.stop();
+				break;
 			}
 		}
+		scn.close();
 
 	}
 }
